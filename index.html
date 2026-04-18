@@ -945,7 +945,28 @@
         </div>
       </div>
 
-
+      <!-- Statistics -->
+      <div class="stats-section">
+        <div class="section-title">📊 累計記録</div>
+        <div class="stats-grid">
+          <div class="metric-card">
+            <div class="metric-label">総距離</div>
+            <div><span id="stat-distance" class="metric-value">0.0</span><span class="metric-unit">km</span></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">総歩数</div>
+            <div><span id="stat-steps" class="metric-value">0</span><span class="metric-unit">歩</span></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">消費kcal</div>
+            <div><span id="stat-calories" class="metric-value">0</span><span class="metric-unit">kcal</span></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">制覇店数</div>
+            <div><span id="stat-chains" class="metric-value">0</span><span class="metric-unit">店</span></div>
+          </div>
+        </div>
+      </div>
 
       <!-- Start Button -->
       <div class="start-section">
@@ -1030,7 +1051,14 @@
         <img id="share-card-img" src="" alt="シェアカード">
       </div>
 
-
+      <!-- Conquest Stamps -->
+      <div class="stamps-section">
+        <div class="stamps-header">
+          <div class="section-title">🏅 制覇スタンプ</div>
+          <div id="stamps-total" class="stamps-count">0 店</div>
+        </div>
+        <div id="stamps-grid" class="stamps-grid"></div>
+      </div>
 
       <div class="arrival-actions">
         <button class="button share-button button-full" onclick="shareToX()">
@@ -1379,17 +1407,14 @@
     function searchChainStores(location) {
       updateLoadingStatus('チェーン店を検索中...', '半径 ' + calculateSearchRadius(walkingMinutes).toLocaleString() + 'm を探索');
 
-      const mapDiv = document.getElementById('map');
-      if (!map) {
-        map = new google.maps.Map(mapDiv, {
-          center: location,
-          zoom: 15,
-          disableDefaultUI: true,
-          styles: darkModeStyles
-        });
-      }
+      // Use a temporary off-screen element so the map is initialized only once in startWalking()
+      const tempDiv = document.createElement('div');
+      const tempMap = new google.maps.Map(tempDiv, {
+        center: new google.maps.LatLng(location.lat, location.lng),
+        zoom: 15
+      });
 
-      const service = new google.maps.places.PlacesService(map);
+      const service = new google.maps.places.PlacesService(tempMap);
       const radius = calculateSearchRadius(walkingMinutes);
       const type = genreTypes[selectedGenre] || 'restaurant';
       const keyword = genreKeywords[selectedGenre] || '';
@@ -1487,14 +1512,20 @@
       walkingSession.progressPercentage = 0;
       walkingSession.status = 'active';
 
-      // Initialize map
-      map = new google.maps.Map(document.getElementById('map'), {
-        center: walkingSession.startLocation,
-        zoom: 15,
-        disableDefaultUI: true,
-        zoomControl: true,
-        styles: darkModeStyles
-      });
+      // Initialize map (single instance — reuse if exists, otherwise create)
+      if (map) {
+        map.setCenter(walkingSession.startLocation);
+        map.setZoom(15);
+        map.setOptions({ disableDefaultUI: true, zoomControl: true });
+      } else {
+        map = new google.maps.Map(document.getElementById('map'), {
+          center: walkingSession.startLocation,
+          zoom: 15,
+          disableDefaultUI: true,
+          zoomControl: true,
+          styles: darkModeStyles
+        });
+      }
 
       // Directions renderer
       if (directionsRenderer) {
@@ -2030,29 +2061,10 @@
     // ============================================
     // App Initialization
     // ============================================
-    // Pre-configured API key
-    const PRESET_API_KEY = 'AIzaSyDuPTwqbGS6AK79lnThVKhWKJqJ_qStQEw';
-
-    function initApp() {
+    async function initApp() {
       loadPreferences();
 
-      let apiKey = getAPIKey();
-
-      // Auto-set API key if not stored
-      if (!apiKey && PRESET_API_KEY) {
-        saveAPIKey(PRESET_API_KEY);
-        apiKey = PRESET_API_KEY;
-      }
-
-      if (!apiKey) {
-        showScreen('setup-screen');
-      } else {
-        loadGoogleMapsAPI(apiKey);
-        showScreen('top-screen');
-        displayStatistics();
-      }
-
-      // Restore slider and genre from preferences
+      // Restore slider and genre from preferences first (no API call needed)
       document.getElementById('walking-slider').value = walkingMinutes;
       updateSlider(walkingMinutes);
 
@@ -2063,6 +2075,33 @@
           chip.classList.add('selected');
         }
       });
+
+      // Check if API key is already cached locally
+      let apiKey = getAPIKey();
+
+      if (!apiKey) {
+        // Fetch from server-side endpoint (key lives in Vercel env vars, never in source)
+        try {
+          const res = await fetch('/api/config');
+          if (!res.ok) throw new Error('config fetch failed');
+          const data = await res.json();
+          if (data.apiKey) {
+            saveAPIKey(data.apiKey);
+            apiKey = data.apiKey;
+          }
+        } catch (e) {
+          console.warn('Could not fetch API key from server:', e);
+        }
+      }
+
+      if (!apiKey) {
+        // Fallback: show manual setup screen
+        showScreen('setup-screen');
+      } else {
+        loadGoogleMapsAPI(apiKey);
+        showScreen('top-screen');
+        displayStatistics();
+      }
     }
 
     // Start app
