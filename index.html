@@ -1171,6 +1171,27 @@
       localStorage.setItem('conquestStamps', JSON.stringify(stamps));
     }
 
+    // ============================================
+    // Visited Destinations History
+    // ============================================
+    const VISITED_HISTORY_MAX = 20;
+
+    function getVisitedHistory() {
+      const data = localStorage.getItem('visitedHistory');
+      if (data) return JSON.parse(data);
+      return [];
+    }
+
+    function addVisitedHistory(placeId) {
+      const history = getVisitedHistory();
+      // Remove if already exists (move to front)
+      const filtered = history.filter(id => id !== placeId);
+      filtered.unshift(placeId);
+      // Keep only the latest entries
+      const trimmed = filtered.slice(0, VISITED_HISTORY_MAX);
+      localStorage.setItem('visitedHistory', JSON.stringify(trimmed));
+    }
+
     function addConquestStamp(chainName) {
       const stamps = getConquestStamps();
       const existing = stamps.chains.find(c => c.name === chainName);
@@ -1447,7 +1468,12 @@
             return;
           }
 
-          const dest = chainStores[Math.floor(Math.random() * chainStores.length)];
+          // Filter out recently visited destinations to avoid repetition
+          const visitedHistory = getVisitedHistory();
+          const freshStores = chainStores.filter(p => !visitedHistory.includes(p.place_id));
+          const candidateStores = freshStores.length > 0 ? freshStores : chainStores;
+
+          const dest = candidateStores[Math.floor(Math.random() * candidateStores.length)];
           walkingSession.destination = {
             placeId: dest.place_id,
             name: dest.name,
@@ -1457,6 +1483,9 @@
               lng: dest.geometry.location.lng()
             }
           };
+
+          // Record this destination in history
+          addVisitedHistory(dest.place_id);
 
           calculateRoute(location, walkingSession.destination.location);
         } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
