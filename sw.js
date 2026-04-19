@@ -1,4 +1,4 @@
-const CACHE_NAME = 'samayoeru-ibukuro-v1';
+const CACHE_NAME = 'samayoeru-ibukuro-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

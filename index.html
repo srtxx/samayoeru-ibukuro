@@ -909,6 +909,30 @@
 
 
   <!-- ==========================================
+       Setup Screen (fallback — server key unavailable)
+       ========================================== -->
+  <div id="setup-screen" class="screen">
+    <div class="setup-container">
+      <div class="setup-icon">🗺️</div>
+      <h1 class="setup-title">彷徨える胃袋</h1>
+      <p class="setup-subtitle">Google Maps APIキーを設定してください</p>
+
+      <div class="setup-input-group">
+        <label class="setup-input-label" for="api-key-input">Google Maps API Key</label>
+        <input id="api-key-input" class="setup-input" type="text"
+               placeholder="AIza..." autocomplete="off" spellcheck="false">
+      </div>
+
+      <button class="button button-full" onclick="saveAndProceed()">設定して始める</button>
+
+      <p class="setup-info">
+        <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer">Google Cloud Console</a>
+        でAPIキーを取得し、Maps JavaScript API・Directions API を有効化してください。
+      </p>
+    </div>
+  </div>
+
+  <!-- ==========================================
        Top Screen
        ========================================== -->
   <div id="top-screen" class="screen">
@@ -1108,7 +1132,7 @@
     let map = null;
     let userMarker = null;
     let destMarker = null;
-    let directionsRenderer = null;
+    let routePolyline = null;
     let selectedGenre = 'all';
     let walkingMinutes = 15;
 
@@ -1128,23 +1152,29 @@
 
     // ============================================
     // localStorage Helpers
+    // NOTE: APIキーは localStorage に保存しません。
+    //       キーはサーバーサイドエンドポイント(/api/config)から
+    //       毎回取得し、セッション変数にも保持しません。
     // ============================================
-    function saveAPIKey(key) {
-      localStorage.setItem('apiKey', key);
-    }
 
-    function getAPIKey() {
-      return localStorage.getItem('apiKey');
-    }
-
-    function clearAPIKey() {
-      localStorage.removeItem('apiKey');
+    /** localStorage から JSON を安全に読み込む共通ヘルパー */
+    function safeParseJSON(key, fallback) {
+      try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      } catch (_) {
+        return fallback;
+      }
     }
 
     function getStatistics() {
-      const data = localStorage.getItem('statistics');
-      if (data) return JSON.parse(data);
-      return { totalDistance: 0, totalSteps: 0, totalCalories: 0, totalSessions: 0 };
+      const raw = safeParseJSON('statistics', {});
+      return {
+        totalDistance: Number(raw.totalDistance) || 0,
+        totalSteps:    Number(raw.totalSteps)    || 0,
+        totalCalories: Number(raw.totalCalories) || 0,
+        totalSessions: Number(raw.totalSessions) || 0
+      };
     }
 
     function saveStatistics(stats) {
@@ -1154,17 +1184,19 @@
 
     function updateStatisticsFromSession(session) {
       const stats = getStatistics();
-      stats.totalDistance += session.distanceTraveled;
-      stats.totalSteps += session.steps;
-      stats.totalCalories += session.calories;
+      stats.totalDistance += Number(session.distanceTraveled) || 0;
+      stats.totalSteps    += Number(session.steps)           || 0;
+      stats.totalCalories += Number(session.calories)        || 0;
       stats.totalSessions += 1;
       saveStatistics(stats);
     }
 
     function getConquestStamps() {
-      const data = localStorage.getItem('conquestStamps');
-      if (data) return JSON.parse(data);
-      return { chains: [], totalUnique: 0 };
+      const raw = safeParseJSON('conquestStamps', {});
+      const chains = Array.isArray(raw.chains) ? raw.chains.filter(
+        c => c && typeof c.name === 'string'
+      ) : [];
+      return { chains, totalUnique: chains.length };
     }
 
     function saveConquestStamps(stamps) {
@@ -1217,12 +1249,11 @@
     }
 
     function loadPreferences() {
-      const data = localStorage.getItem('preferences');
-      if (data) {
-        const prefs = JSON.parse(data);
-        walkingMinutes = prefs.defaultWalkingMinutes || 15;
-        selectedGenre = prefs.defaultGenre || 'all';
-      }
+      const prefs = safeParseJSON('preferences', {});
+      const minutes = parseInt(prefs.defaultWalkingMinutes, 10);
+      walkingMinutes = (minutes >= 5 && minutes <= 40) ? minutes : 15;
+      const validGenres = ['all', 'convenience', 'family', 'izakaya', 'ramen', 'cafe', 'burger'];
+      selectedGenre = validGenres.includes(prefs.defaultGenre) ? prefs.defaultGenre : 'all';
     }
 
     // ============================================
@@ -1345,20 +1376,19 @@
     // ============================================
     function saveAndProceed() {
       const input = document.getElementById('api-key-input');
-      const key = input.value.trim();
+      const key = input ? input.value.trim() : '';
       if (!key) {
         showToast('入力エラー', 'APIキーを入力してください。');
         return;
       }
-      saveAPIKey(key);
+      // セキュリティ: キーは localStorage に保存せずセッション内のみで使用
       loadGoogleMapsAPI(key);
       showScreen('top-screen');
       displayStatistics();
     }
 
     function resetAPIKey() {
-      if (confirm('APIキーをリセットしますか？')) {
-        clearAPIKey();
+      if (confirm('設定をリセットしてセットアップ画面に戻りますか？')) {
         showScreen('setup-screen');
       }
     }
@@ -1425,127 +1455,120 @@
       document.getElementById('loading-substatus').textContent = substatus || '';
     }
 
-    function searchChainStores(location) {
+    // セキュリティ: Places API 呼び出しはサーバーサイドプロキシ経由
+    // APIキーはクライアントに渡らない
+    async function searchChainStores(location) {
       updateLoadingStatus('チェーン店を検索中...', '半径 ' + calculateSearchRadius(walkingMinutes).toLocaleString() + 'm を探索');
 
-      // Use a temporary off-screen element so the map is initialized only once in startWalking()
-      const tempDiv = document.createElement('div');
-      const tempMap = new google.maps.Map(tempDiv, {
-        center: new google.maps.LatLng(location.lat, location.lng),
-        zoom: 15
-      });
-
-      const service = new google.maps.places.PlacesService(tempMap);
-      const radius = calculateSearchRadius(walkingMinutes);
-      const type = genreTypes[selectedGenre] || 'restaurant';
+      const radius  = calculateSearchRadius(walkingMinutes);
+      const type    = genreTypes[selectedGenre]    || 'restaurant';
       const keyword = genreKeywords[selectedGenre] || '';
 
-      const request = {
-        location: new google.maps.LatLng(location.lat, location.lng),
-        radius: radius,
-        type: type
-      };
+      const params = new URLSearchParams({
+        lat: location.lat,
+        lng: location.lng,
+        radius,
+        type
+      });
+      if (keyword) params.set('keyword', keyword);
 
-      if (keyword) {
-        request.keyword = keyword;
-      }
+      try {
+        const res = await fetch('/api/places?' + params.toString());
+        if (!res.ok) throw new Error('places fetch failed: ' + res.status);
+        const data = await res.json();
 
-      service.nearbySearch(request, (results, status) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK && results.length > 0) {
-          let chainStores = results.filter(isChainStore);
-
-          if (chainStores.length === 0) {
-            // fallback: use all results if no chains found
-            chainStores = results;
-          }
-
-          if (chainStores.length === 0) {
-            showErrorModal(
-              'チェーン店が見つかりませんでした',
-              '検索範囲を広げるか、ジャンルフィルターを変更してみてください。'
-            );
-            showScreen('top-screen');
-            return;
-          }
+        if (data.status === 'OK' && Array.isArray(data.results) && data.results.length > 0) {
+          let chainStores = data.results.filter(isChainStore);
+          if (chainStores.length === 0) chainStores = data.results;
 
           // Filter out recently visited destinations to avoid repetition
-          const visitedHistory = getVisitedHistory();
-          const freshStores = chainStores.filter(p => !visitedHistory.includes(p.place_id));
+          const visitedHistory  = getVisitedHistory();
+          const freshStores     = chainStores.filter(p => !visitedHistory.includes(p.place_id));
           const candidateStores = freshStores.length > 0 ? freshStores : chainStores;
 
           const dest = candidateStores[Math.floor(Math.random() * candidateStores.length)];
+          // REST API returns lat/lng as plain numbers (not LatLng methods)
           walkingSession.destination = {
-            placeId: dest.place_id,
-            name: dest.name,
-            address: dest.vicinity || '',
+            placeId : dest.place_id,
+            name    : dest.name,
+            address : dest.vicinity || '',
             location: {
-              lat: dest.geometry.location.lat(),
-              lng: dest.geometry.location.lng()
+              lat: dest.geometry.location.lat,
+              lng: dest.geometry.location.lng
             }
           };
 
-          // Record this destination in history
           addVisitedHistory(dest.place_id);
+          await calculateRoute(location, walkingSession.destination.location);
 
-          calculateRoute(location, walkingSession.destination.location);
-        } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+        } else if (data.status === 'ZERO_RESULTS') {
           showErrorModal(
             'チェーン店が見つかりませんでした',
             '検索範囲を広げるか、ジャンルフィルターを変更してみてください。'
           );
           showScreen('top-screen');
         } else {
-          handleAPIError(status, 'Places');
+          handleAPIError(data.status || 'UNKNOWN_ERROR', 'Places');
         }
-      });
+      } catch (err) {
+        console.error('Places proxy error:', err);
+        showErrorModal('検索エラー', '店舗の検索に失敗しました。通信環境を確認してください。');
+        showScreen('top-screen');
+      }
     }
 
-    function calculateRoute(origin, destination) {
+    // セキュリティ: Directions API 呼び出しはサーバーサイドプロキシ経由
+    async function calculateRoute(origin, destination) {
       updateLoadingStatus('ルートを計算中...', walkingSession.destination.name + ' への道を探しています');
 
-      const directionsService = new google.maps.DirectionsService();
-      directionsService.route(
-        {
-          origin: new google.maps.LatLng(origin.lat, origin.lng),
-          destination: new google.maps.LatLng(destination.lat, destination.lng),
-          travelMode: google.maps.TravelMode.WALKING
-        },
-        (result, status) => {
-          if (status === google.maps.DirectionsStatus.OK) {
-            const leg = result.routes[0].legs[0];
-            walkingSession.route = {
-              distance: leg.distance.value,
-              duration: leg.duration.value,
-              result: result
-            };
+      const params = new URLSearchParams({
+        origin_lat: origin.lat,
+        origin_lng: origin.lng,
+        dest_lat:   destination.lat,
+        dest_lng:   destination.lng
+      });
 
-            startWalking(result);
-          } else {
-            handleAPIError(status, 'Directions');
-          }
+      try {
+        const res = await fetch('/api/directions?' + params.toString());
+        if (!res.ok) throw new Error('directions fetch failed: ' + res.status);
+        const data = await res.json();
+
+        if (data.status === 'OK' && Array.isArray(data.routes) && data.routes.length > 0) {
+          const leg = data.routes[0].legs[0];
+          walkingSession.route = {
+            distance:        leg.distance.value,
+            duration:        leg.duration.value,
+            encodedPolyline: data.routes[0].overview_polyline.points
+          };
+          startWalking();
+        } else {
+          handleAPIError(data.status || 'UNKNOWN_ERROR', 'Directions');
         }
-      );
+      } catch (err) {
+        console.error('Directions proxy error:', err);
+        showErrorModal('ルートエラー', 'ルートの取得に失敗しました。通信環境を確認してください。');
+        showScreen('top-screen');
+      }
     }
 
     // ============================================
     // Walking Screen Logic
     // ============================================
-    function startWalking(directionsResult) {
+    function startWalking() {
       showScreen('walking-screen');
 
       // Reset session metrics
-      walkingSession.distanceTraveled = 0;
-      walkingSession.lastPosition = walkingSession.startLocation;
-      walkingSession.steps = 0;
-      walkingSession.calories = 0;
-      walkingSession.progressPercentage = 0;
-      walkingSession.status = 'active';
+      walkingSession.distanceTraveled    = 0;
+      walkingSession.lastPosition        = walkingSession.startLocation;
+      walkingSession.steps               = 0;
+      walkingSession.calories            = 0;
+      walkingSession.progressPercentage  = 0;
+      walkingSession.status              = 'active';
 
       // Initialize map (single instance — reuse if exists, otherwise create)
       if (map) {
         map.setCenter(walkingSession.startLocation);
         map.setZoom(15);
-        map.setOptions({ disableDefaultUI: true, zoomControl: true });
       } else {
         map = new google.maps.Map(document.getElementById('map'), {
           center: walkingSession.startLocation,
@@ -1556,32 +1579,41 @@
         });
       }
 
-      // Directions renderer
-      if (directionsRenderer) {
-        directionsRenderer.setMap(null);
+      // Clear previous route
+      if (routePolyline) {
+        routePolyline.setMap(null);
+        routePolyline = null;
       }
-      directionsRenderer = new google.maps.DirectionsRenderer({
-        map: map,
-        suppressMarkers: true,
-        polylineOptions: {
-          strokeColor: '#BA7517',
-          strokeWeight: 5,
-          strokeOpacity: 0.8
-        }
-      });
-      directionsRenderer.setDirections(directionsResult);
+
+      // Draw route from encoded polyline (geometry library)
+      if (walkingSession.route.encodedPolyline) {
+        const path = google.maps.geometry.encoding.decodePath(
+          walkingSession.route.encodedPolyline
+        );
+        routePolyline = new google.maps.Polyline({
+          path,
+          strokeColor:   '#BA7517',
+          strokeWeight:  5,
+          strokeOpacity: 0.8,
+          map
+        });
+      }
+
+      // Clear previous markers
+      if (userMarker) { userMarker.setMap(null); userMarker = null; }
+      if (destMarker) { destMarker.setMap(null); destMarker = null; }
 
       // User marker
       userMarker = new google.maps.Marker({
         position: walkingSession.startLocation,
-        map: map,
+        map,
         icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 10,
-          fillColor: '#4285F4',
-          fillOpacity: 1,
-          strokeColor: '#FFFFFF',
-          strokeWeight: 3
+          path:          google.maps.SymbolPath.CIRCLE,
+          scale:         10,
+          fillColor:     '#4285F4',
+          fillOpacity:   1,
+          strokeColor:   '#FFFFFF',
+          strokeWeight:  3
         },
         zIndex: 10
       });
@@ -1589,11 +1621,8 @@
       // Destination marker
       destMarker = new google.maps.Marker({
         position: walkingSession.destination.location,
-        map: map,
-        label: {
-          text: '🍜',
-          fontSize: '24px'
-        }
+        map,
+        label: { text: '🍜', fontSize: '24px' }
       });
 
       // Update UI
@@ -1683,10 +1712,15 @@
         walkingSession.watchId = null;
       }
 
+      // Clear previous route overlay
+      if (routePolyline) {
+        routePolyline.setMap(null);
+        routePolyline = null;
+      }
+
       walkingSession.status = 'rerolled';
       showScreen('loading-screen');
 
-      // Use current position for new search
       const loc = walkingSession.currentLocation || walkingSession.startLocation;
       walkingSession.startLocation = loc;
       searchChainStores(loc);
@@ -1871,12 +1905,16 @@
     // X (Twitter) Share
     // ============================================
     function shareToX() {
-      const text = `${walkingSession.destination.name}まで${(walkingSession.distanceTraveled / 1000).toFixed(1)}km歩きました！\n` +
+      const text = `${walkingSession.destination.name}まで` +
+                   `${(walkingSession.distanceTraveled / 1000).toFixed(1)}km歩きました！\n` +
                    `${walkingSession.steps.toLocaleString()}歩 / ${walkingSession.calories}kcal\n` +
                    `#彷徨える胃袋 #今日のチェーン旅`;
 
+      // シェア前確認 — 訪問先・行動データが公開されることをユーザーに明示
+      if (!confirm(`以下の内容をXでシェアします:\n\n${text}\n\nシェアしますか？`)) return;
+
       const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
-      window.open(url, '_blank', 'width=550,height=420');
+      window.open(url, '_blank', 'width=550,height=420,noopener,noreferrer');
     }
 
     // ============================================
@@ -1907,21 +1945,15 @@
 
     function handleAPIError(status, apiName) {
       const messages = {
-        'ZERO_RESULTS': 'ルートが見つかりませんでした。',
-        'OVER_QUERY_LIMIT': 'APIの利用制限に達しました。しばらく待ってからお試しください。',
-        'REQUEST_DENIED': 'APIキーが無効です。正しいキーを入力してください。',
-        'UNKNOWN_ERROR': 'エラーが発生しました。'
+        'ZERO_RESULTS':    'ルートが見つかりませんでした。',
+        'OVER_QUERY_LIMIT':'APIの利用制限に達しました。しばらく待ってからお試しください。',
+        'REQUEST_DENIED':  'APIリクエストが拒否されました。サーバー設定を確認してください。',
+        'UNKNOWN_ERROR':   'エラーが発生しました。'
       };
 
       const msg = messages[status] || messages['UNKNOWN_ERROR'];
       showErrorModal(apiName + ' エラー', msg + '\nもう一度お試しください。');
-
-      if (status === 'REQUEST_DENIED') {
-        clearAPIKey();
-        showScreen('setup-screen');
-      } else {
-        showScreen('top-screen');
-      }
+      showScreen('top-screen');
     }
 
     function showErrorModal(title, message) {
@@ -2045,12 +2077,15 @@
 
       const script = document.createElement('script');
       script.id = 'google-maps-script';
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=onMapsLoaded`;
+      // Places API はサーバープロキシ経由のため不要、geometry のみロード
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry&callback=onMapsLoaded`;
       script.async = true;
       script.defer = true;
       script.onerror = () => {
-        showErrorModal('Google Maps 読み込みエラー', 'Google Maps APIの読み込みに失敗しました。APIキーを確認してください。');
-        clearAPIKey();
+        showErrorModal(
+          'Google Maps 読み込みエラー',
+          'Google Maps APIの読み込みに失敗しました。管理者にお問い合わせください。'
+        );
         showScreen('setup-screen');
       };
       document.head.appendChild(script);
@@ -2091,9 +2126,11 @@
     // App Initialization
     // ============================================
     async function initApp() {
+      // セキュリティ: 旧バージョンで localStorage に保存されたAPIキーを削除
+      localStorage.removeItem('apiKey');
+
       loadPreferences();
 
-      // Restore slider and genre from preferences first (no API call needed)
       document.getElementById('walking-slider').value = walkingMinutes;
       updateSlider(walkingMinutes);
 
@@ -2105,32 +2142,24 @@
         }
       });
 
-      // Check if API key is already cached locally
-      let apiKey = getAPIKey();
-
-      if (!apiKey) {
-        // Fetch from server-side endpoint (key lives in Vercel env vars, never in source)
-        try {
-          const res = await fetch('/api/config');
-          if (!res.ok) throw new Error('config fetch failed');
-          const data = await res.json();
-          if (data.apiKey) {
-            saveAPIKey(data.apiKey);
-            apiKey = data.apiKey;
-          }
-        } catch (e) {
-          console.warn('Could not fetch API key from server:', e);
+      // サーバーサイドエンドポイントからMaps JS表示用キーを取得
+      // キーはlocalStorageに保存せず、即座にSDKロードに使用してから破棄
+      try {
+        const res = await fetch('/api/config');
+        if (!res.ok) throw new Error('config fetch failed: ' + res.status);
+        const data = await res.json();
+        if (data.apiKey) {
+          loadGoogleMapsAPI(data.apiKey);
+          showScreen('top-screen');
+          displayStatistics();
+          return;
         }
+      } catch (e) {
+        console.warn('Could not fetch API key from server:', e);
       }
 
-      if (!apiKey) {
-        // Fallback: show manual setup screen
-        showScreen('setup-screen');
-      } else {
-        loadGoogleMapsAPI(apiKey);
-        showScreen('top-screen');
-        displayStatistics();
-      }
+      // フォールバック: 手動入力セットアップ画面
+      showScreen('setup-screen');
     }
 
     // Start app
