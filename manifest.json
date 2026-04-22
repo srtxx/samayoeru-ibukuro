@@ -1,7 +1,7 @@
 {
   "name": "彷徨える胃袋",
   "short_name": "彷徨える胃袋",
-  "description": "今日も、あてなく歩こう。ランダムにチェーン店を選んで歩くPWAアプリ",
+  "description": "今日も、あてなく歩こう。ランダムにグルメを選んで歩くPWAアプリ",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1A1814",

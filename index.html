@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="description" content="今日も、あてなく歩こう。ランダムにチェーン店を選んで歩くPWAアプリ">
+  <meta name="description" content="今日も、あてなく歩こう。ランダムにグルメを選んで歩くPWAアプリ">
   <meta name="theme-color" content="#BA7517">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -553,6 +553,37 @@
       height: 100%;
     }
 
+    .map-back-btn {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 10;
+      background: rgba(43, 40, 31, 0.85); /* var(--bg2) opacity */
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(250, 199, 117, 0.2);
+      color: var(--amber);
+      font-size: 14px;
+      font-weight: bold;
+      padding: 10px 16px;
+      border-radius: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      transition: all 0.2s ease;
+    }
+
+    .map-back-btn:hover {
+      background: rgba(250, 199, 117, 0.15);
+      transform: translateY(-2px);
+    }
+
+    .map-back-btn:active {
+      transform: translateY(0);
+    }
+
     .walking-panel {
       flex: 1;
       padding: 20px 24px;
@@ -1071,6 +1102,9 @@
        ========================================== -->
   <div id="walking-screen" class="screen">
     <div class="map-container">
+      <button class="map-back-btn" onclick="quitAdventure()">
+        <span style="font-size: 16px;">←</span> トップに戻る
+      </button>
       <div id="map"></div>
     </div>
     <div class="walking-panel">
@@ -1530,7 +1564,7 @@
     // セキュリティ: Places API 呼び出しはサーバーサイドプロキシ経由
     // APIキーはクライアントに渡らない
     async function searchChainStores(location) {
-      updateLoadingStatus('チェーン店を検索中...', '半径 ' + calculateSearchRadius(walkingMinutes).toLocaleString() + 'm を探索');
+      updateLoadingStatus('グルメを検索中...', '半径 ' + calculateSearchRadius(walkingMinutes).toLocaleString() + 'm を探索');
 
       const radius  = calculateSearchRadius(walkingMinutes);
       const type    = genreTypes[selectedGenre]    || 'restaurant';
@@ -1587,7 +1621,7 @@
 
         } else if (data.status === 'ZERO_RESULTS') {
           showErrorModal(
-            'チェーン店が見つかりませんでした',
+            'グルメが見つかりませんでした',
             '検索範囲を広げるか、ジャンルフィルターを変更してみてください。'
           );
           showScreen('top-screen');
@@ -1643,7 +1677,7 @@
 
       // Reset session metrics
       walkingSession.distanceTraveled    = 0;
-      walkingSession.lastPosition        = walkingSession.startLocation;
+      walkingSession.lastPosition        = { ...walkingSession.startLocation, timestamp: Date.now() };
       walkingSession.steps               = 0;
       walkingSession.calories            = 0;
       walkingSession.progressPercentage  = 0;
@@ -1730,16 +1764,34 @@
 
       // Calculate distance from last position
       if (walkingSession.lastPosition) {
+        // 1. 精度が悪すぎるデータは計算に含めない (都市部を考慮し50m)
+        const accuracy = position.coords.accuracy || 10;
+        if (accuracy > 50) return;
+
+        // 2. 端末側で「ほぼ静止している（スピード0.2m/s未満）」と判定できる場合は無視
+        if (position.coords.speed !== null && position.coords.speed < 0.2) {
+          return;
+        }
+
         const moved = haversineDistance(
           walkingSession.lastPosition.lat,
           walkingSession.lastPosition.lng,
           newLat, newLng
         );
 
-        // Filter out GPS noise (ignore movements < 3m)
-        if (moved > 3) {
+        const elapsedSec = (position.timestamp - walkingSession.lastPosition.timestamp) / 1000;
+        
+        // 3. ワープ対策：異常な速度（例: 3.5m/s = 時速約12.6km 以上）はGPSの飛び（または不正な移動）とみなす
+        if (elapsedSec > 0 && (moved / elapsedSec) > 3.5) {
+          // 基準点をワープ先に更新して次からの計測を正常化しつつ、距離は加算しない
+          walkingSession.lastPosition = { lat: newLat, lng: newLng, timestamp: position.timestamp };
+          return;
+        }
+
+        // 4. 静止時のGPSの揺らぎ（モヤモヤ）を完全に無視するため、一度の判定で最低4m以上の移動を必須にする
+        if (moved > 4) {
           walkingSession.distanceTraveled += moved;
-          walkingSession.lastPosition = { lat: newLat, lng: newLng };
+          walkingSession.lastPosition = { lat: newLat, lng: newLng, timestamp: position.timestamp };
         }
       }
 
@@ -1802,6 +1854,9 @@
       if (!confirm('別の店に引き直しますか？')) return;
 
       stopTracking();
+      // Keep accumulated stats before wiping session
+      updateStatisticsFromSession(walkingSession);
+      
       walkingSession.status = 'rerolled';
       showScreen('loading-screen');
 
@@ -1814,6 +1869,9 @@
       if (!confirm('冒険をやめてトップに戻りますか？')) return;
 
       stopTracking();
+      // Keep accumulated stats
+      updateStatisticsFromSession(walkingSession);
+
       walkingSession.status = 'inactive';
       showScreen('top-screen');
       displayStatistics();
@@ -2018,7 +2076,7 @@
       switch (error.code) {
         case error.PERMISSION_DENIED:
           title = '位置情報の許可が必要です';
-          message = 'このアプリは現在地を使用して近くのチェーン店を探します。ブラウザの設定で位置情報を許可してください。';
+          message = 'このアプリは現在地を使用して近くのグルメを探します。ブラウザの設定で位置情報を許可してください。';
           break;
         case error.POSITION_UNAVAILABLE:
           title = '位置情報を取得できません';
