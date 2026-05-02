@@ -1,13 +1,13 @@
-import { GENRES } from '../constants/genres';
 import { calculateSearchRadius } from '../utils/calc';
 
 export default function TopScreen({
   walkingMinutes,
   setWalkingMinutes,
   selectedGenre,
-  setSelectedGenre,
-  statistics,
-  stamps,
+  storeTypes,
+  setStoreTypes,
+  priceLevels,
+  setPriceLevels,
   onStart,
   isOffline,
   onSavePreferences,
@@ -15,12 +15,19 @@ export default function TopScreen({
   function handleSlider(e) {
     const val = parseInt(e.target.value);
     setWalkingMinutes(val);
-    onSavePreferences(val, selectedGenre);
+    onSavePreferences(val, selectedGenre, storeTypes, priceLevels);
   }
 
-  function handleGenre(genreId) {
-    setSelectedGenre(genreId);
-    onSavePreferences(walkingMinutes, genreId);
+  function handleStoreTypeToggle(type) {
+    const newTypes = { ...storeTypes, [type]: !storeTypes[type] };
+    setStoreTypes(newTypes);
+    onSavePreferences(walkingMinutes, selectedGenre, newTypes, priceLevels);
+  }
+
+  function handlePriceLevelToggle(level) {
+    const newLevels = { ...priceLevels, [level]: !priceLevels[level] };
+    setPriceLevels(newLevels);
+    onSavePreferences(walkingMinutes, selectedGenre, storeTypes, newLevels);
   }
 
   const radius = calculateSearchRadius(walkingMinutes);
@@ -54,63 +61,37 @@ export default function TopScreen({
           />
         </div>
 
-        {/* Genre Filter */}
-        <div className="genre-section">
-          <div className="section-title">🍽️ ジャンル</div>
-          <div className="genre-chips">
-            {GENRES.map((g) => (
-              <span
-                key={g.id}
-                className={`chip${selectedGenre === g.id ? ' selected' : ''}`}
-                onClick={() => handleGenre(g.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && handleGenre(g.id)}
-              >
-                {g.emoji ? `${g.emoji} ` : ''}{g.label}
-              </span>
-            ))}
+        {/* Store Type Filter */}
+        <div className="filter-section">
+          <div className="section-title">🏪 経営形態</div>
+          <div className="checkbox-group">
+            <label className="checkbox-label">
+              <input type="checkbox" checked={storeTypes.chain} onChange={() => handleStoreTypeToggle('chain')} />
+              <span>グルメ（チェーン店）</span>
+            </label>
+            <label className="checkbox-label">
+              <input type="checkbox" checked={storeTypes.individual} onChange={() => handleStoreTypeToggle('individual')} />
+              <span>個人経営</span>
+            </label>
           </div>
         </div>
 
-        {/* Statistics */}
-        <div className="stats-section">
-          <div className="section-title">📊 累計記録</div>
-          <div className="stats-grid">
-            <div className="metric-card">
-              <div className="metric-label">総距離</div>
-              <div>
-                <span className="metric-value">
-                  {(statistics.totalDistance / 1000).toFixed(1)}
-                </span>
-                <span className="metric-unit">km</span>
-              </div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">総歩数</div>
-              <div>
-                <span className="metric-value">
-                  {statistics.totalSteps.toLocaleString()}
-                </span>
-                <span className="metric-unit">歩</span>
-              </div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">消費kcal</div>
-              <div>
-                <span className="metric-value">
-                  {statistics.totalCalories.toLocaleString()}
-                </span>
-                <span className="metric-unit">kcal</span>
-              </div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">制覇店数</div>
-              <div>
-                <span className="metric-value">{stamps.totalUnique}</span>
-                <span className="metric-unit">店</span>
-              </div>
-            </div>
+        {/* Price Level Filter */}
+        <div className="filter-section">
+          <div className="section-title">💰 価格帯</div>
+          <div className="checkbox-group">
+            <label className="checkbox-label">
+              <input type="checkbox" checked={priceLevels.cheap} onChange={() => handlePriceLevelToggle('cheap')} />
+              <span>安い (〜1000円)</span>
+            </label>
+            <label className="checkbox-label">
+              <input type="checkbox" checked={priceLevels.moderate} onChange={() => handlePriceLevelToggle('moderate')} />
+              <span>普通 (1000〜3000円)</span>
+            </label>
+            <label className="checkbox-label">
+              <input type="checkbox" checked={priceLevels.expensive} onChange={() => handlePriceLevelToggle('expensive')} />
+              <span>高い (3000円〜)</span>
+            </label>
           </div>
         </div>
 

@@ -5,7 +5,7 @@ export default function handler(req, res) {
     return res.status(500).json({ error: 'API key not configured on server.' });
   }
 
-  // Cache for 1 hour, CDN-cacheable only for same origin
-  res.setHeader('Cache-Control', 'private, max-age=3600');
+  // Cache-Control: no-store to prevent API key from being cached for 1 hour
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.status(200).json({ apiKey });
 }

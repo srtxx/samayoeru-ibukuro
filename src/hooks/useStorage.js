@@ -96,12 +96,19 @@ export function loadPreferences() {
   const walkingMinutes = minutes >= 5 && minutes <= 40 ? minutes : 15;
   const validGenres = ['all', 'convenience', 'family', 'izakaya', 'ramen', 'cafe', 'burger'];
   const selectedGenre = validGenres.includes(prefs.defaultGenre) ? prefs.defaultGenre : 'all';
-  return { walkingMinutes, selectedGenre };
+  const storeTypes = prefs.storeTypes || { chain: true, individual: true };
+  const priceLevels = prefs.priceLevels || { cheap: true, moderate: true, expensive: true };
+  return { walkingMinutes, selectedGenre, storeTypes, priceLevels };
 }
 
-export function savePreferences(walkingMinutes, selectedGenre) {
+export function savePreferences(walkingMinutes, selectedGenre, storeTypes, priceLevels) {
   localStorage.setItem(
     'preferences',
-    JSON.stringify({ defaultWalkingMinutes: walkingMinutes, defaultGenre: selectedGenre })
+    JSON.stringify({
+      defaultWalkingMinutes: walkingMinutes,
+      defaultGenre: selectedGenre,
+      storeTypes,
+      priceLevels
+    })
   );
 }

@@ -55,6 +55,8 @@ export default function App() {
   // ---- Preferences ----
   const [walkingMinutes, setWalkingMinutes] = useState(15);
   const [selectedGenre, setSelectedGenre] = useState('all');
+  const [storeTypes, setStoreTypes] = useState({ chain: true, individual: true });
+  const [priceLevels, setPriceLevels] = useState({ cheap: true, moderate: true, expensive: true });
 
   // ---- Walking session (mutable ref for geolocation callbacks) ----
   const sessionRef = useRef({ ...INITIAL_SESSION });
@@ -95,6 +97,8 @@ export default function App() {
     const prefs = loadPreferences();
     setWalkingMinutes(prefs.walkingMinutes);
     setSelectedGenre(prefs.selectedGenre);
+    setStoreTypes(prefs.storeTypes);
+    setPriceLevels(prefs.priceLevels);
 
     // オフライン検知
     const onOffline = () => setIsOffline(true);
@@ -160,8 +164,8 @@ export default function App() {
   // ============================================
   // Top Screen
   // ============================================
-  function handleSavePreferences(minutes, genre) {
-    savePreferences(minutes, genre);
+  function handleSavePreferences(minutes, genre, sTypes, pLevels) {
+    savePreferences(minutes, genre, sTypes, pLevels);
   }
 
   // ============================================
@@ -211,24 +215,59 @@ export default function App() {
       const data = await res.json();
 
       if (data.status === 'OK' && Array.isArray(data.results) && data.results.length > 0) {
-        let chainStores = data.results.filter(isChainStore);
-        if (chainStores.length === 0) chainStores = data.results;
+        // 価格帯とチェーン店/個人経営によるフィルタリング
+        let filteredStores = data.results.filter(p => {
+          // 価格帯フィルタ
+          const level = p.price_level;
+          let passPrice = false;
+          if (priceLevels.cheap && priceLevels.moderate && priceLevels.expensive) passPrice = true;
+          else if (level === undefined || level === 0) passPrice = true; // 不明や無料は常に許可
+          else if (level === 1 && priceLevels.cheap) passPrice = true;
+          else if (level === 2 && priceLevels.moderate) passPrice = true;
+          else if (level >= 3 && priceLevels.expensive) passPrice = true;
+          if (!passPrice) return false;
 
-        // 最近訪問した場所を除外
+          // 経営形態フィルタ
+          const isChain = isChainStore(p);
+          let passType = false;
+          if (storeTypes.chain && storeTypes.individual) passType = true;
+          else if (storeTypes.chain && isChain) passType = true;
+          else if (storeTypes.individual && !isChain) passType = true;
+          if (!passType) return false;
+
+          return true;
+        });
+
+        // 訪問済みを除外 (Issue #4: もう行ったお店は出さない)
         const visitedHistory = getVisitedHistory();
-        const freshStores = chainStores.filter((p) => !visitedHistory.includes(p.place_id));
-        const candidateStores = freshStores.length > 0 ? freshStores : chainStores;
+        filteredStores = filteredStores.filter((p) => !visitedHistory.includes(p.place_id));
 
-        // 目標距離に最も近い店舗上位3件からランダム選択
-        const storesWithDiff = candidateStores.map((store) => {
+        if (filteredStores.length === 0) {
+          showErrorModal(
+            'グルメが見つかりませんでした',
+            '指定した条件の未訪問店舗が見つかりませんでした。検索範囲を広げるか、条件を変更してみてください。'
+          );
+          setScreen('top');
+          return;
+        }
+
+        // 距離計算
+        const storesWithDist = filteredStores.map((store) => {
           const storeLat = store.geometry.location.lat;
           const storeLng = store.geometry.location.lng;
           const straightDist = haversineDistance(location.lat, location.lng, storeLat, storeLng);
-          return { store, diff: Math.abs(straightDist - radius) };
+          return { store, dist: straightDist };
         });
-        storesWithDiff.sort((a, b) => a.diff - b.diff);
 
-        const topCandidates = storesWithDiff.slice(0, Math.min(3, storesWithDiff.length));
+        // 指定した距離の範囲内で絞り込み
+        const storesInRange = storesWithDist.filter(s => s.dist <= radius);
+        const validStores = storesInRange.length > 0 ? storesInRange : storesWithDist;
+
+        // 最も遠い順にソート (Issue #4: 遠い順にソート)
+        validStores.sort((a, b) => b.dist - a.dist);
+
+        // ベスト3の中でランダムに呼び出す (Issue #4)
+        const topCandidates = validStores.slice(0, Math.min(3, validStores.length));
         const dest = topCandidates[Math.floor(Math.random() * topCandidates.length)].store;
 
         sessionRef.current.destination = {
@@ -526,6 +565,10 @@ export default function App() {
           setWalkingMinutes={setWalkingMinutes}
           selectedGenre={selectedGenre}
           setSelectedGenre={setSelectedGenre}
+          storeTypes={storeTypes}
+          setStoreTypes={setStoreTypes}
+          priceLevels={priceLevels}
+          setPriceLevels={setPriceLevels}
           statistics={statistics}
           stamps={stamps}
           onStart={startAdventure}
