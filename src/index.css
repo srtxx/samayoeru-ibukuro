@@ -334,7 +334,7 @@ body {
 
 /* Walking Time Slider */
 .slider-section {
-  margin-bottom: 28px;
+  margin-bottom: 36px;
 }
 
 .slider-display {
@@ -357,7 +357,7 @@ body {
 }
 
 .slider-distance {
-  color: var(--text-muted);
+  color: #A0A0A0;
   font-size: 14px;
 }
 
@@ -411,7 +411,7 @@ input[type="range"]::-moz-range-thumb {
 
 /* Filter Sections (Checkboxes) */
 .filter-section {
-  margin-bottom: 28px;
+  margin-bottom: 36px;
 }
 
 .checkbox-group {
@@ -483,12 +483,17 @@ input[type="range"]::-moz-range-thumb {
 
 .start-button {
   width: 100%;
-  padding: 20px;
-  font-size: 20px;
+  padding: 16px 20px;
+  font-size: 18px;
   border-radius: 16px;
   background: linear-gradient(135deg, var(--amber-dark), #D48B1D);
   box-shadow: 0 4px 24px rgba(186, 117, 23, 0.3);
-  letter-spacing: 2px;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1.4;
 }
 
 .start-button:hover {
@@ -497,8 +502,9 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .start-button-icon {
-  margin-right: 8px;
-  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ============================================

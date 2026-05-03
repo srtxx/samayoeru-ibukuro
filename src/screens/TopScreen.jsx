@@ -1,4 +1,5 @@
 import { calculateSearchRadius } from '../utils/calc';
+import { Footprints, Store, Coins, Compass } from 'lucide-react';
 
 export default function TopScreen({
   walkingMinutes,
@@ -42,7 +43,7 @@ export default function TopScreen({
       <div className="top-content">
         {/* Walking Time Slider */}
         <div className="slider-section">
-          <div className="section-title">🚶 歩行時間</div>
+          <div className="section-title"><Footprints size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }}/> 歩行時間</div>
           <div className="slider-display">
             <div>
               <span className="slider-time">{walkingMinutes}</span>
@@ -63,7 +64,7 @@ export default function TopScreen({
 
         {/* Store Type Filter */}
         <div className="filter-section">
-          <div className="section-title">🏪 経営形態</div>
+          <div className="section-title"><Store size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }}/> 経営形態</div>
           <div className="checkbox-group">
             <label className="checkbox-label">
               <input type="checkbox" checked={storeTypes.chain} onChange={() => handleStoreTypeToggle('chain')} />
@@ -78,7 +79,7 @@ export default function TopScreen({
 
         {/* Price Level Filter */}
         <div className="filter-section">
-          <div className="section-title">💰 価格帯</div>
+          <div className="section-title"><Coins size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }}/> 価格帯</div>
           <div className="checkbox-group">
             <label className="checkbox-label">
               <input type="checkbox" checked={priceLevels.cheap} onChange={() => handlePriceLevelToggle('cheap')} />
@@ -103,7 +104,7 @@ export default function TopScreen({
             onClick={onStart}
             disabled={isOffline}
           >
-            <span className="start-button-icon">🧭</span>
+            <span className="start-button-icon"><Compass size={22} /></span>
             目的地をランダムに決めて出発
           </button>
         </div>
