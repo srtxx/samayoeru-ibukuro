@@ -217,6 +217,9 @@ export default function App() {
       if (data.status === 'OK' && Array.isArray(data.results) && data.results.length > 0) {
         // 価格帯とチェーン店/個人経営によるフィルタリング
         let filteredStores = data.results.filter(p => {
+          // 営業中フィルタ: open_now が明示的に false の店舗は除外（情報なしは許可）
+          if (p.opening_hours?.open_now === false) return false;
+
           // 価格帯フィルタ
           const level = p.price_level;
           let passPrice = false;
