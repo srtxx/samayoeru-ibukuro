@@ -60,6 +60,7 @@ export default function App() {
 
   // ---- Walking session (mutable ref for geolocation callbacks) ----
   const sessionRef = useRef({ ...INITIAL_SESSION });
+  const arrivalFiredRef = useRef(false); // 到着判定の二重発火防止
   const [sessionSnapshot, setSessionSnapshot] = useState({ ...INITIAL_SESSION });
 
   // ---- Statistics / Stamps ----
@@ -347,6 +348,7 @@ export default function App() {
     s.calories = 0;
     s.progressPercentage = 0;
     s.status = 'active';
+    arrivalFiredRef.current = false; // 到着フラグをリセット
 
     setSessionSnapshot({ ...s });
     setScreen('walking');
@@ -396,11 +398,13 @@ export default function App() {
     // React state 更新
     setSessionSnapshot({ ...s });
 
-    // 到着判定
+    // 到着判定（二重発火防止）
     if (
+      !arrivalFiredRef.current &&
       s.destination &&
       checkArrival(newLat, newLng, s.destination.location.lat, s.destination.location.lng)
     ) {
+      arrivalFiredRef.current = true;
       handleArrival();
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -420,7 +424,7 @@ export default function App() {
 
     stopTracking();
     updateStatisticsFromSession(sessionRef.current);
-    sessionRef.current.status = 'rerolled';
+    // NOTE: status='rerolled' のセットは不要（直後に sessionRef.current を丸ごと上書きするため）
 
     const loc = sessionRef.current.currentLocation || sessionRef.current.startLocation;
     sessionRef.current = {
@@ -447,7 +451,7 @@ export default function App() {
   // ============================================
   // Arrival Screen
   // ============================================
-  function handleArrival() {
+  async function handleArrival() {
     geo.stopWatching();
     const s = sessionRef.current;
     s.status = 'completed';
@@ -455,8 +459,8 @@ export default function App() {
     updateStatisticsFromSession(s);
     const updatedStamps = addConquestStamp(s.destination.name);
 
-    // シェアカード生成
-    const cardUrl = generateShareCard({
+    // シェアカード生成（Webフォントのロード完了を待つため async）
+    const cardUrl = await generateShareCard({
       restaurantName: s.destination.name,
       distance: (s.distanceTraveled / 1000).toFixed(1),
       steps: s.steps.toLocaleString(),
@@ -567,13 +571,10 @@ export default function App() {
           walkingMinutes={walkingMinutes}
           setWalkingMinutes={setWalkingMinutes}
           selectedGenre={selectedGenre}
-          setSelectedGenre={setSelectedGenre}
           storeTypes={storeTypes}
           setStoreTypes={setStoreTypes}
           priceLevels={priceLevels}
           setPriceLevels={setPriceLevels}
-          statistics={statistics}
-          stamps={stamps}
           onStart={startAdventure}
           isOffline={isOffline}
           onSavePreferences={handleSavePreferences}

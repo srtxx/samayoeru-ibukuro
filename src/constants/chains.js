@@ -18,20 +18,18 @@ const knownChains = [
   '餃子の王将', '大阪王将', 'かつや', '松のや', '天丼てんや',
   'ミスタードーナツ', 'サーティワン', 'ピザーラ', 'ドミノ・ピザ',
   'すし銚子丸', 'くら寿司', 'スシロー', 'はま寿司',
-  "COCO'S", 'Starbucks', "McDonald's", 'Subway', 'KFC',
+  "COCO'S", 'Starbucks', "McDonald's", 'Subway',
 ];
 
 function isKnownChain(name) {
   return knownChains.some((chain) => name.includes(chain));
 }
 
-function matchesChainPattern(name) {
-  const katakanaPattern = /[\u30A0-\u30FF]{3,}/;
-  const englishPattern = /[A-Z]{2,}/;
-  return katakanaPattern.test(name) || englishPattern.test(name);
-}
+// NOTE: matchesChainPattern（カタカナ・英大文字によるヒューリスティック）は削除。
+// カタカナ3文字以上や英大文字2文字以上という条件では個人経営店を誤判定する可能性があるため、
+// 既知チェーン店リストのみで判定する。
 
 export function isChainStore(place) {
   const name = place.name;
-  return isKnownChain(name) || matchesChainPattern(name);
+  return isKnownChain(name);
 }

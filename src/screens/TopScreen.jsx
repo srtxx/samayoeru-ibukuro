@@ -68,7 +68,7 @@ export default function TopScreen({
           <div className="checkbox-group">
             <label className="checkbox-label">
               <input type="checkbox" checked={storeTypes.chain} onChange={() => handleStoreTypeToggle('chain')} />
-              <span>グルメ（チェーン店）</span>
+              <span>チェーン店</span>
             </label>
             <label className="checkbox-label">
               <input type="checkbox" checked={storeTypes.individual} onChange={() => handleStoreTypeToggle('individual')} />

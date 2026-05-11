@@ -20,15 +20,12 @@ export default function WalkingScreen({
     mapControls.placeMarkers(session.startLocation, session.destination.location);
   }, [session.destination]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 現在地マーカーの更新
-  useEffect(() => {
-    if (!session.currentLocation) return;
-    mapControls.updateUserMarker(session.currentLocation);
-  }, [session.currentLocation]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   const progress = Math.round(session.progressPercentage);
+  // remaining: ルート距離 × 残進捗率で計算（GPS直線距離との誤差を回避）
   const remaining = session.route
-    ? Math.max(0, session.route.distance - session.distanceTraveled)
+    ? Math.max(0, session.route.distance * (1 - session.progressPercentage / 100))
     : 0;
 
   return (

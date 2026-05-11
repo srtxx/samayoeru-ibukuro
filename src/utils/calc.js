@@ -48,7 +48,10 @@ export function formatDistance(meters) {
 // ============================================
 // シェアカード生成 (Canvas API)
 // ============================================
-export function generateShareCard({ restaurantName, distance, steps, calories }) {
+export async function generateShareCard({ restaurantName, distance, steps, calories }) {
+  // WebフォントがCanvas APIで使えるようロード完了を待つ
+  await document.fonts.ready;
+
   const canvas = document.createElement('canvas');
   canvas.width = 1200;
   canvas.height = 630;
