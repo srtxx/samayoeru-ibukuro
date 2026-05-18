@@ -94,16 +94,12 @@ export function loadPreferences() {
   const prefs = safeParseJSON('preferences', {});
   const minutes = parseInt(prefs.defaultWalkingMinutes, 10);
   const walkingMinutes = minutes >= 5 && minutes <= 40 ? minutes : 15;
-  const highRatingOnly = prefs.highRatingOnly === true;
-  return { walkingMinutes, highRatingOnly };
+  return { walkingMinutes };
 }
 
-export function savePreferences(walkingMinutes, highRatingOnly) {
+export function savePreferences(walkingMinutes) {
   localStorage.setItem(
     'preferences',
-    JSON.stringify({
-      defaultWalkingMinutes: walkingMinutes,
-      highRatingOnly,
-    })
+    JSON.stringify({ defaultWalkingMinutes: walkingMinutes })
   );
 }

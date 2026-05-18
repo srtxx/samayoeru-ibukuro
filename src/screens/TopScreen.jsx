@@ -1,11 +1,9 @@
 import { calculateSearchRadius } from '../utils/calc';
-import { Footprints, Compass, Star } from 'lucide-react';
+import { Footprints, Compass } from 'lucide-react';
 
 export default function TopScreen({
   walkingMinutes,
   setWalkingMinutes,
-  highRatingOnly,
-  setHighRatingOnly,
   onStart,
   isOffline,
   onSavePreferences,
@@ -13,13 +11,7 @@ export default function TopScreen({
   function handleSlider(e) {
     const val = parseInt(e.target.value);
     setWalkingMinutes(val);
-    onSavePreferences(val, highRatingOnly);
-  }
-
-  function handleHighRatingToggle() {
-    const newVal = !highRatingOnly;
-    setHighRatingOnly(newVal);
-    onSavePreferences(walkingMinutes, newVal);
+    onSavePreferences(val);
   }
 
   const radius = calculateSearchRadius(walkingMinutes);
@@ -34,7 +26,10 @@ export default function TopScreen({
       <div className="top-content">
         {/* Walking Time Slider */}
         <div className="slider-section">
-          <div className="section-title"><Footprints size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }}/> 歩行時間</div>
+          <div className="section-title">
+            <Footprints size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }}/>
+            歩行時間
+          </div>
           <div className="slider-display">
             <div>
               <span className="slider-time">{walkingMinutes}</span>
@@ -51,23 +46,6 @@ export default function TopScreen({
             step="1"
             onChange={handleSlider}
           />
-        </div>
-
-        {/* Rating Filter */}
-        <div className="filter-section">
-          <div className="section-title"><Star size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }}/> 評価フィルター</div>
-          <div className="rating-toggle-row">
-            <div className="rating-toggle-info">
-              <div className="rating-toggle-label">高評価店のみ表示</div>
-              <div className="rating-toggle-desc">Google評価 4.0以上・口コミ10件以上</div>
-            </div>
-            <button
-              className={`toggle-switch${highRatingOnly ? ' on' : ''}`}
-              onClick={handleHighRatingToggle}
-              aria-pressed={highRatingOnly}
-              aria-label="高評価フィルター切り替え"
-            />
-          </div>
         </div>
 
         {/* Start Button */}

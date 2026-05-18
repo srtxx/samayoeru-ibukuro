@@ -53,7 +53,6 @@ export default function App() {
 
   // ---- Preferences ----
   const [walkingMinutes, setWalkingMinutes] = useState(15);
-  const [highRatingOnly, setHighRatingOnly] = useState(false);
 
   // ---- Walking session (mutable ref for geolocation callbacks) ----
   const sessionRef = useRef({ ...INITIAL_SESSION });
@@ -94,7 +93,6 @@ export default function App() {
 
     const prefs = loadPreferences();
     setWalkingMinutes(prefs.walkingMinutes);
-    setHighRatingOnly(prefs.highRatingOnly);
 
     // オフライン検知
     const onOffline = () => setIsOffline(true);
@@ -160,8 +158,8 @@ export default function App() {
   // ============================================
   // Top Screen
   // ============================================
-  function handleSavePreferences(minutes, highRating) {
-    savePreferences(minutes, highRating);
+  function handleSavePreferences(minutes) {
+    savePreferences(minutes);
   }
 
   // ============================================
@@ -208,17 +206,11 @@ export default function App() {
       const data = await res.json();
 
       if (data.status === 'OK' && Array.isArray(data.results) && data.results.length > 0) {
-        // フィルタリング
+        // フィルタリング（高評価フィルター常時ON: Google評価4.0以上・口コミ10件以上）
         let filteredStores = data.results.filter(p => {
-          // 営業中フィルタ: open_now が明示的に false の店舗は除外（情報なしは許可）
           if (p.opening_hours?.open_now === false) return false;
-
-          // 高評価フィルタ: Google評価 4.0以上・口コミ10件以上
-          if (highRatingOnly) {
-            if (!p.rating || p.rating < 4.0) return false;
-            if (!p.user_ratings_total || p.user_ratings_total < 10) return false;
-          }
-
+          if (!p.rating || p.rating < 4.0) return false;
+          if (!p.user_ratings_total || p.user_ratings_total < 10) return false;
           return true;
         });
 
@@ -550,8 +542,6 @@ export default function App() {
         <TopScreen
           walkingMinutes={walkingMinutes}
           setWalkingMinutes={setWalkingMinutes}
-          highRatingOnly={highRatingOnly}
-          setHighRatingOnly={setHighRatingOnly}
           onStart={startAdventure}
           isOffline={isOffline}
           onSavePreferences={handleSavePreferences}
