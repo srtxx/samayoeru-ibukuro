@@ -1,14 +1,11 @@
 import { calculateSearchRadius } from '../utils/calc';
-import { Footprints, Store, Coins, Compass } from 'lucide-react';
+import { Footprints, Compass, Star } from 'lucide-react';
 
 export default function TopScreen({
   walkingMinutes,
   setWalkingMinutes,
-  selectedGenre,
-  storeTypes,
-  setStoreTypes,
-  priceLevels,
-  setPriceLevels,
+  highRatingOnly,
+  setHighRatingOnly,
   onStart,
   isOffline,
   onSavePreferences,
@@ -16,19 +13,13 @@ export default function TopScreen({
   function handleSlider(e) {
     const val = parseInt(e.target.value);
     setWalkingMinutes(val);
-    onSavePreferences(val, selectedGenre, storeTypes, priceLevels);
+    onSavePreferences(val, highRatingOnly);
   }
 
-  function handleStoreTypeToggle(type) {
-    const newTypes = { ...storeTypes, [type]: !storeTypes[type] };
-    setStoreTypes(newTypes);
-    onSavePreferences(walkingMinutes, selectedGenre, newTypes, priceLevels);
-  }
-
-  function handlePriceLevelToggle(level) {
-    const newLevels = { ...priceLevels, [level]: !priceLevels[level] };
-    setPriceLevels(newLevels);
-    onSavePreferences(walkingMinutes, selectedGenre, storeTypes, newLevels);
+  function handleHighRatingToggle() {
+    const newVal = !highRatingOnly;
+    setHighRatingOnly(newVal);
+    onSavePreferences(walkingMinutes, newVal);
   }
 
   const radius = calculateSearchRadius(walkingMinutes);
@@ -62,37 +53,20 @@ export default function TopScreen({
           />
         </div>
 
-        {/* Store Type Filter */}
+        {/* Rating Filter */}
         <div className="filter-section">
-          <div className="section-title"><Store size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }}/> 経営形態</div>
-          <div className="checkbox-group">
-            <label className="checkbox-label">
-              <input type="checkbox" checked={storeTypes.chain} onChange={() => handleStoreTypeToggle('chain')} />
-              <span>チェーン店</span>
-            </label>
-            <label className="checkbox-label">
-              <input type="checkbox" checked={storeTypes.individual} onChange={() => handleStoreTypeToggle('individual')} />
-              <span>個人経営</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Price Level Filter */}
-        <div className="filter-section">
-          <div className="section-title"><Coins size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }}/> 価格帯</div>
-          <div className="checkbox-group">
-            <label className="checkbox-label">
-              <input type="checkbox" checked={priceLevels.cheap} onChange={() => handlePriceLevelToggle('cheap')} />
-              <span>安い (〜1000円)</span>
-            </label>
-            <label className="checkbox-label">
-              <input type="checkbox" checked={priceLevels.moderate} onChange={() => handlePriceLevelToggle('moderate')} />
-              <span>普通 (1000〜3000円)</span>
-            </label>
-            <label className="checkbox-label">
-              <input type="checkbox" checked={priceLevels.expensive} onChange={() => handlePriceLevelToggle('expensive')} />
-              <span>高い (3000円〜)</span>
-            </label>
+          <div className="section-title"><Star size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }}/> 評価フィルター</div>
+          <div className="rating-toggle-row">
+            <div className="rating-toggle-info">
+              <div className="rating-toggle-label">高評価店のみ表示</div>
+              <div className="rating-toggle-desc">Google評価 4.0以上・口コミ10件以上</div>
+            </div>
+            <button
+              className={`toggle-switch${highRatingOnly ? ' on' : ''}`}
+              onClick={handleHighRatingToggle}
+              aria-pressed={highRatingOnly}
+              aria-label="高評価フィルター切り替え"
+            />
           </div>
         </div>
 

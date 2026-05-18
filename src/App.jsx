@@ -20,8 +20,7 @@ import {
   loadPreferences,
   savePreferences,
 } from './hooks/useStorage';
-import { genreKeywords, genreTypes } from './constants/genres';
-import { isChainStore } from './constants/chains';
+
 import {
   calculateSearchRadius,
   calculateSteps,
@@ -54,9 +53,7 @@ export default function App() {
 
   // ---- Preferences ----
   const [walkingMinutes, setWalkingMinutes] = useState(15);
-  const [selectedGenre, setSelectedGenre] = useState('all');
-  const [storeTypes, setStoreTypes] = useState({ chain: true, individual: true });
-  const [priceLevels, setPriceLevels] = useState({ cheap: true, moderate: true, expensive: true });
+  const [highRatingOnly, setHighRatingOnly] = useState(false);
 
   // ---- Walking session (mutable ref for geolocation callbacks) ----
   const sessionRef = useRef({ ...INITIAL_SESSION });
@@ -97,9 +94,7 @@ export default function App() {
 
     const prefs = loadPreferences();
     setWalkingMinutes(prefs.walkingMinutes);
-    setSelectedGenre(prefs.selectedGenre);
-    setStoreTypes(prefs.storeTypes);
-    setPriceLevels(prefs.priceLevels);
+    setHighRatingOnly(prefs.highRatingOnly);
 
     // オフライン検知
     const onOffline = () => setIsOffline(true);
@@ -165,8 +160,8 @@ export default function App() {
   // ============================================
   // Top Screen
   // ============================================
-  function handleSavePreferences(minutes, genre, sTypes, pLevels) {
-    savePreferences(minutes, genre, sTypes, pLevels);
+  function handleSavePreferences(minutes, highRating) {
+    savePreferences(minutes, highRating);
   }
 
   // ============================================
@@ -201,14 +196,11 @@ export default function App() {
 
   async function searchChainStores(location) {
     const radius = calculateSearchRadius(walkingMinutes);
-    const type = genreTypes[selectedGenre] || 'restaurant';
-    const keyword = genreKeywords[selectedGenre] || '';
 
     setLoadingStatus('グルメを検索中...');
     setLoadingSubstatus(`半径 ${radius.toLocaleString()}m を探索`);
 
-    const params = new URLSearchParams({ lat: location.lat, lng: location.lng, radius, type });
-    if (keyword) params.set('keyword', keyword);
+    const params = new URLSearchParams({ lat: location.lat, lng: location.lng, radius, type: 'restaurant' });
 
     try {
       const res = await fetch('/api/places?' + params.toString());
@@ -216,28 +208,16 @@ export default function App() {
       const data = await res.json();
 
       if (data.status === 'OK' && Array.isArray(data.results) && data.results.length > 0) {
-        // 価格帯とチェーン店/個人経営によるフィルタリング
+        // フィルタリング
         let filteredStores = data.results.filter(p => {
           // 営業中フィルタ: open_now が明示的に false の店舗は除外（情報なしは許可）
           if (p.opening_hours?.open_now === false) return false;
 
-          // 価格帯フィルタ
-          const level = p.price_level;
-          let passPrice = false;
-          if (priceLevels.cheap && priceLevels.moderate && priceLevels.expensive) passPrice = true;
-          else if (level === undefined || level === 0) passPrice = true; // 不明や無料は常に許可
-          else if (level === 1 && priceLevels.cheap) passPrice = true;
-          else if (level === 2 && priceLevels.moderate) passPrice = true;
-          else if (level >= 3 && priceLevels.expensive) passPrice = true;
-          if (!passPrice) return false;
-
-          // 経営形態フィルタ
-          const isChain = isChainStore(p);
-          let passType = false;
-          if (storeTypes.chain && storeTypes.individual) passType = true;
-          else if (storeTypes.chain && isChain) passType = true;
-          else if (storeTypes.individual && !isChain) passType = true;
-          if (!passType) return false;
+          // 高評価フィルタ: Google評価 4.0以上・口コミ10件以上
+          if (highRatingOnly) {
+            if (!p.rating || p.rating < 4.0) return false;
+            if (!p.user_ratings_total || p.user_ratings_total < 10) return false;
+          }
 
           return true;
         });
@@ -570,11 +550,8 @@ export default function App() {
         <TopScreen
           walkingMinutes={walkingMinutes}
           setWalkingMinutes={setWalkingMinutes}
-          selectedGenre={selectedGenre}
-          storeTypes={storeTypes}
-          setStoreTypes={setStoreTypes}
-          priceLevels={priceLevels}
-          setPriceLevels={setPriceLevels}
+          highRatingOnly={highRatingOnly}
+          setHighRatingOnly={setHighRatingOnly}
           onStart={startAdventure}
           isOffline={isOffline}
           onSavePreferences={handleSavePreferences}

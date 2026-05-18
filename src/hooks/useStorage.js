@@ -94,21 +94,16 @@ export function loadPreferences() {
   const prefs = safeParseJSON('preferences', {});
   const minutes = parseInt(prefs.defaultWalkingMinutes, 10);
   const walkingMinutes = minutes >= 5 && minutes <= 40 ? minutes : 15;
-  const validGenres = ['all', 'convenience', 'family', 'izakaya', 'ramen', 'cafe', 'burger'];
-  const selectedGenre = validGenres.includes(prefs.defaultGenre) ? prefs.defaultGenre : 'all';
-  const storeTypes = prefs.storeTypes || { chain: true, individual: true };
-  const priceLevels = prefs.priceLevels || { cheap: true, moderate: true, expensive: true };
-  return { walkingMinutes, selectedGenre, storeTypes, priceLevels };
+  const highRatingOnly = prefs.highRatingOnly === true;
+  return { walkingMinutes, highRatingOnly };
 }
 
-export function savePreferences(walkingMinutes, selectedGenre, storeTypes, priceLevels) {
+export function savePreferences(walkingMinutes, highRatingOnly) {
   localStorage.setItem(
     'preferences',
     JSON.stringify({
       defaultWalkingMinutes: walkingMinutes,
-      defaultGenre: selectedGenre,
-      storeTypes,
-      priceLevels
+      highRatingOnly,
     })
   );
 }
