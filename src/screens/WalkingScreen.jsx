@@ -38,12 +38,6 @@ export default function WalkingScreen({
       </div>
 
       <div className="walking-panel">
-        {/* ステータスバナー */}
-        <div className="walking-status-banner">
-          <div className="walking-status-pulse" />
-          <span className="walking-status-text">🚶 目的地へ向かっています</span>
-        </div>
-
         {/* 目的地情報 */}
         <div className="destination-info">
           <div className="destination-name">

@@ -353,10 +353,11 @@ export default function App() {
         return;
       }
 
-      if (moved > 4) {
+      if (moved > 10) {
         s.distanceTraveled += moved;
-        s.lastPosition = { lat: newLat, lng: newLng, timestamp: position.timestamp };
       }
+      // lastPosition は移動量に関わらず常に更新（誤差蓄積を防ぐ）
+      s.lastPosition = { lat: newLat, lng: newLng, timestamp: position.timestamp };
     }
 
     s.currentLocation = { lat: newLat, lng: newLng };
