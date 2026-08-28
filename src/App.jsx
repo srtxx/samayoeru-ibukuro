@@ -206,11 +206,9 @@ export default function App() {
       const data = await res.json();
 
       if (data.status === 'OK' && Array.isArray(data.results) && data.results.length > 0) {
-        // フィルタリング（高評価フィルター常時ON: Google評価4.0以上・口コミ10件以上）
+        // フィルタリング（営業中の店舗のみ）
         let filteredStores = data.results.filter(p => {
           if (p.opening_hours?.open_now === false) return false;
-          if (!p.rating || p.rating < 4.0) return false;
-          if (!p.user_ratings_total || p.user_ratings_total < 10) return false;
           return true;
         });
 
