@@ -193,12 +193,14 @@ export default function App() {
   }
 
   async function searchChainStores(location) {
-    const radius = calculateSearchRadius(walkingMinutes);
+    const desiredRadius = calculateSearchRadius(walkingMinutes);
+    // APIには広めの半径で検索して多くの候補を確保（最大50000m）
+    const apiRadius = Math.min(desiredRadius * 3, 50000);
 
     setLoadingStatus('グルメを検索中...');
-    setLoadingSubstatus(`半径 ${radius.toLocaleString()}m を探索`);
+    setLoadingSubstatus(`半径 ${desiredRadius.toLocaleString()}m を探索`);
 
-    const params = new URLSearchParams({ lat: location.lat, lng: location.lng, radius, type: 'restaurant' });
+    const params = new URLSearchParams({ lat: location.lat, lng: location.lng, radius: apiRadius, type: 'restaurant' });
 
     try {
       const res = await fetch('/api/places?' + params.toString());
@@ -207,35 +209,72 @@ export default function App() {
 
       if (data.status === 'OK' && Array.isArray(data.results) && data.results.length > 0) {
         // フィルタリング（営業中の店舗のみ）
-        let filteredStores = data.results.filter(p => {
+        const openStores = data.results.filter(p => {
           if (p.opening_hours?.open_now === false) return false;
           return true;
         });
 
         // 訪問済みを除外 (Issue #4: もう行ったお店は出さない)
         const visitedHistory = getVisitedHistory();
-        filteredStores = filteredStores.filter((p) => !visitedHistory.includes(p.place_id));
+        const unvisitedStores = openStores.filter((p) => !visitedHistory.includes(p.place_id));
 
-        if (filteredStores.length === 0) {
+        // 訪問済み除外後にゼロなら訪問済みも含めてフォールバック
+        let usedVisitedFallback = false;
+        let candidateStores;
+        if (unvisitedStores.length > 0) {
+          candidateStores = unvisitedStores;
+        } else if (openStores.length > 0) {
+          candidateStores = openStores;
+          usedVisitedFallback = true;
+        } else {
           showErrorModal(
             'グルメが見つかりませんでした',
-            '指定した条件の未訪問店舗が見つかりませんでした。検索範囲を広げるか、条件を変更してみてください。'
+            '指定した条件の店舗が見つかりませんでした。検索範囲を広げるか、条件を変更してみてください。'
           );
           setScreen('top');
           return;
         }
 
         // 距離計算
-        const storesWithDist = filteredStores.map((store) => {
+        const storesWithDist = candidateStores.map((store) => {
           const storeLat = store.geometry.location.lat;
           const storeLng = store.geometry.location.lng;
           const straightDist = haversineDistance(location.lat, location.lng, storeLat, storeLng);
           return { store, dist: straightDist };
         });
 
-        // 指定した距離の範囲内で絞り込み
-        const storesInRange = storesWithDist.filter(s => s.dist <= radius);
-        const validStores = storesInRange.length > 0 ? storesInRange : storesWithDist;
+        // 指定距離の内側から段階的にフォールバック
+        const fallbackMultipliers = [1.0, 1.5, 2.5];
+        let validStores = null;
+        for (const multiplier of fallbackMultipliers) {
+          const maxDist = desiredRadius * multiplier;
+          const inRange = storesWithDist.filter(s => s.dist <= maxDist);
+          if (inRange.length > 0) {
+            validStores = inRange;
+            if (multiplier > 1.0) {
+              showToast(
+                '検索範囲を拡大しました',
+                `指定範囲に店舗がなかったため、${maxDist.toLocaleString()}m 圏内で探しました`,
+                'warning'
+              );
+            }
+            break;
+          }
+        }
+        // すべてのティアで見つからなければ最も近い店舗を使用
+        if (!validStores || validStores.length === 0) {
+          storesWithDist.sort((a, b) => a.dist - b.dist);
+          validStores = storesWithDist.slice(0, Math.min(3, storesWithDist.length));
+          showToast(
+            '検索範囲を拡大しました',
+            '近くに店舗が少ないため、最寄りの店舗を選びました',
+            'warning'
+          );
+        }
+
+        if (usedVisitedFallback) {
+          showToast('未訪問の店舗がありません', '訪問済みの店舗を含めて探しました', 'warning');
+        }
 
         // 最も遠い順にソート (Issue #4: 遠い順にソート)
         validStores.sort((a, b) => b.dist - a.dist);
